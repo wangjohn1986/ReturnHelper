@@ -1,0 +1,54 @@
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+[hidden] { display: none !important; }
+html, body { height: 100%; margin: 0; }
+body {
+  display: flex; flex-direction: column;
+  font: 16px/1.5 -apple-system, "Microsoft JhengHei", system-ui, sans-serif;
+  color: #1f2937; background: #f5f5f7;
+  padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom);
+}
+
+.top {
+  flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between;
+  background: #16a34a; color: #fff; padding: 14px 16px; font-weight: 700; font-size: 18px;
+}
+.gear { border: 0; background: rgba(255,255,255,.2); color: #fff; font-size: 18px; width: 36px; height: 36px; border-radius: 10px; cursor: pointer; }
+
+.main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding: 12px; gap: 10px; }
+.scanbox { display: flex; align-items: center; gap: 10px; }
+.scanbox input {
+  flex: 1; min-width: 0; padding: 14px 14px; border: 2px solid #16a34a; border-radius: 12px;
+  font-size: 17px; background: #fff;
+}
+.scanbox input:focus { outline: none; box-shadow: 0 0 0 4px rgba(22,163,74,.18); }
+.count { font-size: 14px; color: #555; white-space: nowrap; }
+.count b { color: #16a34a; font-size: 20px; }
+
+.tip { margin: 0; font-size: 12px; color: #9ca3af; line-height: 1.5; }
+.tip.dup { color: #d97706; font-weight: 700; }
+.tip.ok { color: #16a34a; font-weight: 700; }
+
+.list { flex: 1 1 auto; min-height: 0; overflow-y: auto; background: #fff; border: 1px solid #eee; border-radius: 12px; -webkit-overflow-scrolling: touch; }
+.list:empty::after { content: '尚未掃描任何條碼'; display: block; padding: 28px; text-align: center; color: #c0c0c0; font-size: 14px; }
+.row { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid #f3f4f6; }
+.row:last-child { border-bottom: 0; }
+.no { color: #9ca3af; font-size: 13px; min-width: 2em; text-align: right; }
+.code { flex: 1; font-size: 16px; word-break: break-all; font-variant-numeric: tabular-nums; }
+.del { border: 0; background: none; color: #cbd5e1; font-size: 20px; cursor: pointer; padding: 4px 6px; }
+.del:active { color: #dc2626; }
+
+.foot { flex: 0 0 auto; display: flex; gap: 10px; padding: 12px; background: #fff; border-top: 1px solid #eee; }
+.btn { flex: 1; padding: 16px; border: 0; border-radius: 12px; font-size: 17px; font-weight: 700; cursor: pointer; }
+.btn:active { transform: translateY(1px); }
+.btn.cancel { background: #fff; border: 1px solid #e5e7eb; color: #6b7280; }
+.btn.save { background: #0071e3; color: #fff; }
+.btn.ret { background: #16a34a; color: #fff; }
+
+.modal { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.45); padding: 20px; }
+.modal-box { width: 100%; max-width: 420px; background: #fff; border-radius: 16px; padding: 18px; }
+.modal-head { display: flex; align-items: center; justify-content: space-between; font-weight: 700; font-size: 17px; margin-bottom: 12px; }
+.x { border: 0; background: none; font-size: 18px; color: #9ca3af; cursor: pointer; }
+.lab { display: block; font-size: 13px; color: #555; margin-bottom: 6px; }
+.modal-box input { width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 10px; font-size: 16px; }
+.hint { font-size: 12px; color: #9ca3af; line-height: 1.5; margin: 8px 0 14px; }
+.modal-foot { display: flex; gap: 10px; }
