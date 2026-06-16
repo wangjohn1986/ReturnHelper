@@ -15,7 +15,7 @@
 <body>
   <header class="top">
     <span class="top-title">↩ 退貨系統</span>
-    <span class="hdr-prog" id="hdr-prog">0 / 0</span>
+    <span class="hdr-prog" id="hdr-count">已掃 0</span>
   </header>
 
   <!-- 鏡頭舞台 -->
@@ -23,10 +23,9 @@
     <video id="video" playsinline muted autoplay></video>
     <canvas id="frame-canvas" hidden></canvas>
 
-    <!-- 計數器：已完成 / 清單總數 -->
-    <div class="counter" id="counter">已完成 0 / 0</div>
+    <div class="counter" id="counter">已掃描 0 筆</div>
 
-    <!-- 黃框遮罩層（會依比對結果變色） -->
+    <!-- 黃框遮罩層 -->
     <div class="overlay" id="overlay">
       <div class="guide" id="guide">請掃描二維碼</div>
       <div class="frame" id="frame"></div>
@@ -43,37 +42,20 @@
     <div class="toast" id="toast"></div>
   </section>
 
-  <!-- 清單對照表 -->
+  <!-- 掃描清單 -->
   <main class="main">
     <div class="list-head">
-      <span>清單對照表</span>
-      <span class="counts">完成 <b id="cnt-done">0</b>/<b id="cnt-total">0</b> ｜ 異常 <b id="cnt-bad">0</b></span>
+      <span>掃描清單</span>
+      <span class="counts">共 <b id="cnt">0</b> 筆</span>
     </div>
     <div class="list-tools">
-      <button id="import-btn" class="tool-btn primary" type="button">匯入清單</button>
-      <button id="copy-done" class="tool-btn" type="button">複製已完成</button>
-      <button id="export-bad" class="tool-btn" type="button">匯出異常</button>
-      <button id="reset-btn" class="tool-btn danger" type="button">清除進度</button>
+      <button id="copy-list" class="tool-btn primary" type="button">複製清單</button>
+      <button id="export-csv" class="tool-btn" type="button">匯出 CSV</button>
+      <button id="clear-all" class="tool-btn danger" type="button">清除全部</button>
     </div>
     <div class="list" id="list"></div>
-    <p class="empty" id="empty">尚未匯入預期清單。請按「匯入清單」載入 CSV／Excel 或貼上編號。</p>
+    <p class="empty" id="empty">尚無資料，請開啟鏡頭開始掃描。</p>
   </main>
-
-  <!-- 匯入預期清單 -->
-  <div class="modal" id="import-modal" hidden>
-    <div class="modal-box">
-      <div class="modal-head">匯入預期清單 <button id="import-close" class="x" type="button" aria-label="關閉">✕</button></div>
-      <label class="lab">方式一：選擇檔案（CSV / Excel）</label>
-      <input id="import-file" type="file" accept=".csv,.xlsx,.xls">
-      <p class="hint">系統會自動掃描檔案所有欄位，擷取符合 TW＋13 碼的編號。</p>
-      <label class="lab" style="margin-top:12px;">方式二：直接貼上（逗號／空白／換行分隔）</label>
-      <textarea id="import-text" placeholder="TW1234567890123, TW9876543210987 …"></textarea>
-      <div class="modal-foot">
-        <button id="import-cancel" class="btn cancel" type="button">取消</button>
-        <button id="import-apply" class="btn save" type="button">套用清單</button>
-      </div>
-    </div>
-  </div>
 
   <!-- 確認彈窗 -->
   <div class="modal" id="dialog" hidden>
@@ -83,10 +65,9 @@
     </div>
   </div>
 
-  <!-- 外部函式庫：jsQR(條碼後備)、Tesseract(OCR)、XLSX(讀 CSV/Excel)。離線時這些需先連線載入過 -->
+  <!-- 外部函式庫：jsQR(條碼後備)、Tesseract(OCR)。離線時需先連線載入過 -->
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -75,8 +75,8 @@ body {
   box-shadow: 0 0 0 9999px rgba(0,0,0,.45);
   transition: width .25s, height .25s;
 }
-.frame.mode-a { width: 240px; height: 240px; }            /* 模式A：正方形 */
-.frame.mode-b { width: min(86vw, 360px); height: 110px; } /* 模式B：長方形 */
+.frame.mode-a { width: 240px; height: 240px; }                 /* 模式A：正方形 */
+.frame.mode-b { width: min(40vw, 160px); height: min(52vh, 340px); } /* 模式B：直式長條 */
 .frame.ok  { border-color: #22c55e; box-shadow: 0 0 0 9999px rgba(0,0,0,.45), 0 0 18px 4px rgba(34,197,94,.8); }
 .frame.err { border-color: #ef4444; box-shadow: 0 0 0 9999px rgba(0,0,0,.45), 0 0 18px 4px rgba(239,68,68,.8); }
 .ocr-hint {
@@ -136,7 +136,7 @@ body {
 .list-head .counts { font-size: 12px; color: #64748b; font-weight: 600; }
 .list-head .counts b { color: var(--ink); }
 .list-tools { flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); }
-.tool-btn { flex: 1 1 calc(50% - 4px); border: 1px solid var(--line); background: #f8fafc; color: var(--ink); border-radius: 8px; padding: 10px 0; font-weight: 700; font-size: 14px; cursor: pointer; }
+.tool-btn { flex: 1 1 0; border: 1px solid var(--line); background: #f8fafc; color: var(--ink); border-radius: 8px; padding: 10px 0; font-weight: 700; font-size: 14px; cursor: pointer; }
 .tool-btn.primary { background: var(--green); color: #fff; border-color: var(--green); }
 .tool-btn.danger { color: var(--red); border-color: #fecaca; background: #fef2f2; }
 .tool-btn:disabled { opacity: .45; }
