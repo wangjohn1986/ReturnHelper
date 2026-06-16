@@ -1,6 +1,6 @@
 {
-  "name": "掃碼退貨",
-  "short_name": "掃碼退貨",
+  "name": "退貨系統",
+  "short_name": "退貨系統",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

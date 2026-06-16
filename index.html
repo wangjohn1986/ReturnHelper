@@ -2,43 +2,80 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="掃碼退貨">
+  <meta name="apple-mobile-web-app-title" content="退貨系統">
   <meta name="theme-color" content="#16a34a">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="stylesheet" href="style.css">
-  <title>掃碼退貨</title>
+  <title>退貨系統</title>
 </head>
 <body>
   <header class="top">
-    <span class="top-title">↩ 掃碼退貨</span>
+    <span class="top-title">↩ 退貨系統</span>
+    <span class="sync-pill" id="sync-pill" hidden>待上傳 <b id="pending-up">0</b></span>
     <button id="settings-btn" class="gear" type="button" aria-label="設定">⚙</button>
   </header>
 
-  <main class="main">
-    <div class="scanbox">
-      <input id="scan" type="text" placeholder="游標放這裡，掃描條碼…" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
-      <span class="count">已掃 <b id="count">0</b></span>
+  <!-- 鏡頭舞台 -->
+  <section class="stage" id="stage">
+    <video id="video" playsinline muted autoplay></video>
+    <canvas id="frame-canvas" hidden></canvas>
+
+    <!-- 計數器 -->
+    <div class="counter" id="counter">已掃描 0 / 50</div>
+
+    <!-- 黃框遮罩層 -->
+    <div class="overlay" id="overlay">
+      <div class="guide" id="guide">請掃描二維碼</div>
+      <div class="frame" id="frame"></div>
+      <div class="ocr-hint" id="ocr-hint" hidden>辨識中…</div>
     </div>
-    <p class="tip" id="tip">藍牙掃碼器（HID 鍵盤模式）配對後，掃描即自動加入；重複會自動略過。</p>
+
+    <!-- 開啟鏡頭（iOS 需使用者手勢） -->
+    <button class="start-cam" id="start-cam" type="button">📷 點擊開啟鏡頭</button>
+
+    <!-- 右下角模式切換 FAB -->
+    <button class="fab" id="fab" type="button" aria-label="切換掃描模式">
+      <span class="fab-mode" id="fab-mode">A</span>
+      <span class="fab-label" id="fab-label">條碼</span>
+    </button>
+
+    <!-- 掃到時的提示 -->
+    <div class="toast" id="toast"></div>
+  </section>
+
+  <!-- 清單 -->
+  <main class="main">
+    <div class="list-head">
+      <span>暫存／待上傳清單</span>
+      <span class="counts"><b id="cnt-pending">0</b> 暫存 ｜ <b id="cnt-saved">0</b> 待上傳</span>
+    </div>
+    <div class="list-tools">
+      <button id="copy-list" class="tool-btn" type="button">複製清單</button>
+      <button id="export-csv" class="tool-btn" type="button">匯出 CSV</button>
+      <button id="clear-all" class="tool-btn danger" type="button">清除全部</button>
+    </div>
     <div class="list" id="list"></div>
+    <p class="empty" id="empty">尚無資料，請開啟鏡頭開始掃描。</p>
   </main>
 
   <footer class="foot">
-    <button id="cancel" class="btn cancel" type="button">取消</button>
     <button id="save" class="btn save" type="button">儲存</button>
-    <button id="return" class="btn ret" type="button">退貨</button>
+    <button id="upload" class="btn up" type="button">上傳</button>
   </footer>
 
+  <!-- 設定 -->
   <div class="modal" id="settings" hidden>
     <div class="modal-box">
       <div class="modal-head">設定 <button id="settings-close" class="x" type="button" aria-label="關閉">✕</button></div>
-      <label class="lab">退貨上傳網址（公司系統 API）</label>
-      <input id="endpoint" type="url" inputmode="url" placeholder="https://你的系統/api/return">
-      <p class="hint">按「退貨」時，會把整份清單以 JSON（POST）送到此網址。留空則只能本地儲存。</p>
+      <label class="lab">ERP 上傳網址（退貨 API）</label>
+      <input id="endpoint" type="url" inputmode="url" placeholder="https://你的ERP/api/return">
+      <p class="hint">按「上傳」時，會把所有「待上傳」資料以 JSON（POST）批次送到此網址。留空則只能本地儲存。</p>
+      <label class="lab" style="margin-top:12px;">預計筆數（計數器目標）</label>
+      <input id="target-count" type="number" inputmode="numeric" min="1" placeholder="50">
       <div class="modal-foot">
         <button id="settings-cancel" class="btn cancel" type="button">關閉</button>
         <button id="settings-save" class="btn save" type="button">儲存設定</button>
@@ -46,6 +83,17 @@
     </div>
   </div>
 
+  <!-- 確認彈窗（取代瀏覽器 alert/confirm） -->
+  <div class="modal" id="dialog" hidden>
+    <div class="modal-box">
+      <div class="dialog-text" id="dialog-text"></div>
+      <div class="modal-foot" id="dialog-foot"></div>
+    </div>
+  </div>
+
+  <!-- 外部函式庫：jsQR（條碼後備）、Tesseract（OCR）。離線時 OCR 需先連線載入過 -->
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
