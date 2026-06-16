@@ -15,6 +15,7 @@ const LS_SND_ON = 'sr_snd_on', LS_SND_VOL = 'sr_snd_vol', LS_SND_TYPE = 'sr_snd_
 let mode = 'A';
 let stream = null, scanning = false, lastHitAt = 0, bd = null;
 let ocrWorker = null;
+let cropImg = null, cropScale = 1, sel = null, dragging = false, cropStart = { x: 0, y: 0 }; // A 框選欄位狀態
 let actx = null;
 let db = null;
 const seen = new Set();
@@ -89,51 +90,113 @@ async function loop() {
 }
 
 /* ---------- 模式 B：拍照／選照片 批次 OCR ---------- */
-function fileToCanvas(file, maxDim) {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file); const img = new Image();
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
-      const cv = document.createElement('canvas'); cv.width = Math.round(img.width * scale); cv.height = Math.round(img.height * scale);
-      const x = cv.getContext('2d'); x.drawImage(img, 0, 0, cv.width, cv.height);
-      // 灰階(偏重藍通道→淡化藍筆圈註，黑色印刷字保留)＋二值化，提高印刷碼辨識率
-      const im = x.getImageData(0, 0, cv.width, cv.height), d = im.data;
-      for (let i = 0; i < d.length; i += 4) { const g = 0.10 * d[i] + 0.20 * d[i + 1] + 0.70 * d[i + 2]; const v = g > 140 ? 255 : (g < 110 ? 0 : g); d[i] = d[i + 1] = d[i + 2] = v; }
-      x.putImageData(im, 0, 0); resolve(cv);
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('影像載入失敗')); };
-    img.src = url;
-  });
+// 從已載入的 Image 取(子)區域，縮放到 maxDim 內，灰階(偏重藍通道→淡化藍筆圈註)＋二值化
+function imgToCanvas(img, sx, sy, sw, sh, maxDim) {
+  const scale = Math.min(1, maxDim / Math.max(sw, sh));
+  const cv = document.createElement('canvas'); cv.width = Math.round(sw * scale); cv.height = Math.round(sh * scale);
+  const x = cv.getContext('2d'); x.drawImage(img, sx, sy, sw, sh, 0, 0, cv.width, cv.height);
+  const im = x.getImageData(0, 0, cv.width, cv.height), d = im.data;
+  for (let i = 0; i < d.length; i += 4) { const g = 0.10 * d[i] + 0.20 * d[i + 1] + 0.70 * d[i + 2]; const v = g > 140 ? 255 : (g < 110 ? 0 : g); d[i] = d[i + 1] = d[i + 2] = v; }
+  x.putImageData(im, 0, 0); return cv;
 }
 async function ensureOcr() {
   if (ocrWorker || !window.Tesseract) return;
   ocrWorker = await Tesseract.createWorker('eng');
   await ocrWorker.setParameters({ tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', preserve_interword_spaces: '1' });
 }
-function extractCodes(text) {
-  const up = (text || '').toUpperCase(); const set = new Set();
-  // 只接受「獨立的」TW+13 token；前後黏其他英數（如 SPXTW...）一律排除
-  up.split(/[^A-Z0-9]+/).forEach(t => { if (RE_TW.test(t)) set.add(t); });
-  return [...set];
+// 取出精確的 TW+13；另把「TW 開頭、字數接近但不對」列為疑似(多半少認/多認一碼)
+function extractAll(text) {
+  const up = (text || '').toUpperCase(); const exact = new Set(), sus = new Set();
+  up.split(/[^A-Z0-9]+/).forEach(t => {
+    if (RE_TW.test(t)) exact.add(t);
+    else if (/^TW[A-Z0-9]{10,16}$/.test(t)) sus.add(t);
+  });
+  return { exact: [...exact], suspects: [...sus].filter(s => !exact.has(s)) };
 }
-async function processPhoto(file) {
+
+/* ---- A：框選欄位 —— 先讓使用者在照片上框出「物流編號」那一欄再辨識 ---- */
+function openCrop(file) {
   if (!file) return;
   if (!window.Tesseract) { dialog('OCR 函式庫尚未載入（需連網），請稍後再試。', [{ label: '知道了' }]); return; }
-  showBusy('讀取影像…');
+  const url = URL.createObjectURL(file); const img = new Image();
+  img.onload = () => {
+    URL.revokeObjectURL(url); cropImg = img; sel = null;
+    const cv = $('crop-cv');
+    const maxW = Math.min(window.innerWidth * 0.92, 900), maxH = window.innerHeight * 0.58;
+    cropScale = Math.min(maxW / img.width, maxH / img.height, 1);
+    cv.width = Math.round(img.width * cropScale); cv.height = Math.round(img.height * cropScale);
+    drawCrop(); $('crop').hidden = false;
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); dialog('影像載入失敗。', [{ label: '知道了' }]); };
+  img.src = url;
+}
+function drawCrop() {
+  const cv = $('crop-cv'), x = cv.getContext('2d');
+  x.clearRect(0, 0, cv.width, cv.height); x.drawImage(cropImg, 0, 0, cv.width, cv.height);
+  if (sel) { x.fillStyle = 'rgba(255,212,0,.18)'; x.fillRect(sel.x, sel.y, sel.w, sel.h); x.strokeStyle = '#ffd400'; x.lineWidth = 3; x.strokeRect(sel.x, sel.y, sel.w, sel.h); }
+}
+function cropPos(e) {
+  const cv = $('crop-cv'), r = cv.getBoundingClientRect(), p = (e.touches && e.touches[0]) || e;
+  return { x: (p.clientX - r.left) * (cv.width / r.width), y: (p.clientY - r.top) * (cv.height / r.height) };
+}
+function bindCrop() {
+  const cv = $('crop-cv');
+  const down = (e) => { e.preventDefault(); const p = cropPos(e); cropStart = p; sel = { x: p.x, y: p.y, w: 0, h: 0 }; dragging = true; drawCrop(); };
+  const move = (e) => { if (!dragging) return; e.preventDefault(); const p = cropPos(e); sel.x = Math.min(cropStart.x, p.x); sel.y = Math.min(cropStart.y, p.y); sel.w = Math.abs(p.x - cropStart.x); sel.h = Math.abs(p.y - cropStart.y); drawCrop(); };
+  const up = () => { if (!dragging) return; dragging = false; if (sel && (sel.w < 8 || sel.h < 8)) sel = null; drawCrop(); };
+  cv.addEventListener('pointerdown', down); cv.addEventListener('pointermove', move);
+  cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up); cv.addEventListener('pointerleave', up);
+}
+function cropConfirm(whole) {
+  if (!cropImg) return;
+  let region;
+  if (whole) region = [0, 0, cropImg.width, cropImg.height];
+  else {
+    if (!sel || sel.w < 8 || sel.h < 8) { toast('請先在圖上框出範圍', true); return; }
+    region = [sel.x / cropScale, sel.y / cropScale, sel.w / cropScale, sel.h / cropScale];
+  }
+  $('crop').hidden = true;
+  const cv = imgToCanvas(cropImg, region[0], region[1], region[2], region[3], 2600);
+  cropImg = null; runOcr(cv);
+}
+
+/* 執行 OCR（傳入已前處理的 canvas）→ 精確碼直接加入；疑似碼進手動修正清單 */
+async function runOcr(cv) {
+  showBusy('辨識中…（數十筆需數秒）');
   try {
-    const cv = await fileToCanvas(file, 2600);
-    showBusy('辨識中…（整張數十筆需數秒）');
     await ensureOcr();
     const { data } = await ocrWorker.recognize(cv);
-    const codes = extractCodes(data.text || '');
-    if (!codes.length) { hideBusy(); dialog('沒有辨識到 TW＋13 碼。\n小技巧：靠近只拍「物流編號」那一欄、對正、光線足、紙壓平；藍筆盡量別圈在編號上。', [{ label: '知道了' }]); return; }
+    const { exact, suspects } = extractAll(data.text || '');
     let added = 0, dup = 0;
-    for (const code of codes) { if (await addCode(code, 'B')) added++; else dup++; }
-    hideBusy(); render(); beep(true);
-    dialog(`辨識完成：抓到 ${codes.length} 筆\n新增 ${added} 筆${dup ? `，重複略過 ${dup} 筆` : ''}。`, [{ label: '好' }]);
+    for (const code of exact) { if (await addCode(code, 'B')) added++; else dup++; }
+    hideBusy(); render(); if (added) beep(true);
+    if (!exact.length && !suspects.length) { dialog('沒有辨識到 TW＋13 碼。\n小技巧：靠近只拍「物流編號」那一欄、對正、光線足、紙壓平；藍筆別圈在編號上。', [{ label: '知道了' }]); return; }
+    let msg = `辨識完成：精確 ${exact.length} 筆，新增 ${added}${dup ? `，重複略過 ${dup}` : ''} 筆。`;
+    if (suspects.length) dialog(msg + `\n另有 ${suspects.length} 筆「疑似」字數不符，要手動修正嗎？`, [{ label: '修正疑似', onClick: () => openSuspect(suspects) }, { label: '略過' }]);
+    else dialog(msg, [{ label: '好' }]);
   } catch (e) { hideBusy(); dialog('辨識失敗：' + (e && e.message ? e.message : e), [{ label: '知道了' }]); }
 }
+
+/* ---- B：疑似清單 —— 列出字數不對的碼，修正成 TW+13 後逐筆加入 ---- */
+function openSuspect(list) {
+  const box = $('suspect-list'); box.innerHTML = '';
+  list.forEach(code => {
+    const row = document.createElement('div'); row.className = 'sus-row';
+    row.innerHTML = `<input class="sus-inp" value="${code}" maxlength="15" autocapitalize="characters" autocomplete="off" spellcheck="false"><button class="btn save sus-add" type="button">加入</button>`;
+    const inp = row.querySelector('.sus-inp'), btn = row.querySelector('.sus-add');
+    inp.oninput = () => inp.classList.remove('bad');
+    btn.onclick = async () => {
+      const v = inp.value.trim().toUpperCase();
+      if (!RE_TW.test(v)) { inp.classList.add('bad'); toast('需 TW＋13 碼（共 15 字）', true); return; }
+      const ok = await addCode(v, 'B'); render();
+      if (ok) { beep(true); toast('已加入 ' + v); } else toast('已存在，略過', true);
+      row.remove(); if (!box.children.length) closeSuspect();
+    };
+    box.appendChild(row);
+  });
+  $('suspect').hidden = false;
+}
+function closeSuspect() { $('suspect').hidden = true; }
 
 /* ---------- 模式切換 / 框色 / Busy ---------- */
 function setMode(m) {
@@ -311,7 +374,13 @@ async function init() {
   $('start-cam').onclick = () => startCamera(false);
   $('fab').onclick = () => setMode(mode === 'A' ? 'B' : 'A');
   $('batch-btn').onclick = () => $('photo-input').click();
-  $('photo-input').onchange = (e) => { const f = e.target.files && e.target.files[0]; e.target.value = ''; processPhoto(f); };
+  $('photo-input').onchange = (e) => { const f = e.target.files && e.target.files[0]; e.target.value = ''; openCrop(f); };
+  $('crop-cancel').onclick = () => { $('crop').hidden = true; cropImg = null; };
+  $('crop-whole').onclick = () => cropConfirm(true);
+  $('crop-ok').onclick = () => cropConfirm(false);
+  $('suspect-close').onclick = closeSuspect;
+  $('suspect-done').onclick = closeSuspect;
+  bindCrop();
   $('copy-list').onclick = uploadToLine;
   $('clear-all').onclick = clearAll;
   $('settings-btn').onclick = openSettings;

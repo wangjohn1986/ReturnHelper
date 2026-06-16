@@ -190,3 +190,14 @@ body {
 .lab.chk input { width: 20px; height: 20px; }
 .dialog-text { font-size: 15px; color: var(--ink); line-height: 1.6; padding: 8px 4px 4px; text-align: center; }
 .modal-foot { display: flex; gap: 10px; margin-top: 14px; }
+
+/* A 框選欄位 / B 疑似清單 */
+.crop-box { max-width: 96vw; }
+.crop-hint { font-size: 12px; color: #64748b; line-height: 1.5; margin-bottom: 10px; }
+.crop-wrap { display: flex; justify-content: center; background: #0f172a; border-radius: 8px; padding: 6px; max-height: 60vh; overflow: auto; }
+#crop-cv { touch-action: none; max-width: 100%; height: auto; border-radius: 4px; cursor: crosshair; }
+.sus-list { max-height: 50vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 2px; }
+.sus-row { display: flex; gap: 8px; align-items: center; }
+.sus-inp { flex: 1 1 auto; min-width: 0; font-family: ui-monospace, Menlo, Consolas, monospace; font-weight: 700; font-size: 16px; letter-spacing: .5px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; text-transform: uppercase; }
+.sus-inp.bad { border-color: var(--red); background: #fef2f2; }
+.sus-add { flex: 0 0 auto; min-width: 72px; padding: 10px 14px; font-size: 15px; }
