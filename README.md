@@ -1,70 +1,24 @@
-# 掃碼退貨（iPhone PWA 網頁 App）
+# 退貨系統（iPhone PWA 網頁 App）
 
-藍牙掃碼器收集條碼 → 去重 → 本地存檔 → 按「退貨」一次上傳到公司系統。
-iPhone 用 Safari 打開網址後「**加入主畫面**」，就會變成一個 icon、點下去全螢幕像 App。
+鏡頭掃描物流編號（TW＋13 碼）→ **對照預期清單即時防呆比對** → 本地存檔（IndexedDB）。
+iPhone 用 Safari 開網址後「**加入主畫面**」，就變成一個 icon、點下去全螢幕像 App。
 
-> 為什麼不是 Chrome 擴充？iPhone 的瀏覽器不支援 Chrome 擴充，所以做成獨立 PWA 網頁。
+## 功能
+- **雙模式掃描**：模式 A 二維碼（BarcodeDetector，iOS 自動後備 jsQR）／模式 B 物流編號 OCR（Tesseract.js）。右下 FAB 切換。
+- **防呆比對**：先「匯入清單」載入預期編號（CSV／Excel／貼上）。掃到時：
+  - 在清單且未掃 → 框線轉**綠**＋成功音（標記已完成）。
+  - 不在清單／重複 → 框線轉**紅**＋錯誤音（列入異常或提示已掃描）。
+- **清單對照表**：異常 → 已完成 → 等待，狀態一眼看完；計數器顯示「已完成 X / 總數」。
+- **匯出異常**：把「掃到但不在清單」的編號匯成 CSV 供稽核。
+- **複製已完成**：複製已核對成功的編號，貼到電腦端工具帶進 ERP。
 
----
+## 部署（GitHub Pages）
+把本資料夾**所有檔案**上傳到 repo（`index.html / app.js / style.css / sw.js / manifest.webmanifest / icon-192.png / icon-512.png`）→ Settings → Pages → `main` `/(root)` → Save。
+> 整個資料夾都可以直接上傳；`icons/` 子資料夾為舊版重複檔，不影響運作（可留可刪）。
 
-## 一、部署（拿到一個 https 網址）
+## iPhone 安裝
+Safari 開 `https://你的帳號.github.io/scan-return/` → 分享 → **加入主畫面** → 從桌面 icon 開啟 → 點「開啟鏡頭」允許相機。
+> OCR／條碼後備函式庫從 CDN 載入，第一次需有網路；之後黃框條碼可離線。
 
-iPhone 要能用「網址」打開才能加到主畫面，所以要把這個資料夾放到一個 **https 網站**。最簡單用免費的 **GitHub Pages**：
-
-1. 註冊 GitHub 帳號 → 建一個新的 repository（例如 `scan-return`，設 Public）。
-2. 把本資料夾所有檔案（`index.html`、`app.js`、`style.css`、`manifest.webmanifest`、`sw.js`、`icons/`）上傳到該 repo（網頁可直接拖曳上傳）。
-3. repo → **Settings → Pages** → Source 選 `main` 分支、`/ (root)` → Save。
-4. 等 1～2 分鐘，會給你一個網址，像 `https://你的帳號.github.io/scan-return/`。
-
-> 若公司有自己的網站/伺服器，也可以直接把這些檔案放上去（用公司網域；好處是上傳退貨時和公司 API 同網域，免處理 CORS）。
-
----
-
-## 二、iPhone 加到主畫面（變成 icon／App）
-
-1. iPhone 用 **Safari** 打開上面的網址。
-2. 點下方「分享」鈕 → **加入主畫面** → 完成。
-3. 桌面就會出現「掃碼退貨」icon，點下去全螢幕開啟。
-
----
-
-## 三、連接藍牙掃碼器
-
-1. 掃碼器切到 **藍牙 HID／鍵盤模式**（多數掃碼器掃一張說明書上的「Bluetooth HID」條碼即可，依機型）。
-2. iPhone「設定 → 藍牙」配對該掃碼器（它會被當成外接鍵盤）。
-3. 打開「掃碼退貨」App，游標會在綠色掃描框內，**掃描就會自動加入清單**；重複條碼自動略過。
-
----
-
-## 四、按鈕
-
-- **取消**：清空目前掃描清單。
-- **儲存**：把清單存在手機本機（關掉再開會自動帶回，可接續掃）。
-- **退貨**：把整份清單上傳到「設定」裡填的公司系統網址。
-
-右上 **⚙ 設定**：填「退貨上傳網址（公司系統 API）」。沒填的話「退貨」只會提醒先設定。
-
----
-
-## 五、給公司工程師：上傳 API 規格
-
-按「退貨」時，App 會對你設定的網址送出：
-
-```
-POST <你的退貨API網址>
-Content-Type: application/json
-
-{
-  "at": 1718500000000,          // 上傳時間(毫秒)
-  "count": 12,                  // 筆數
-  "items": [
-    { "code": "條碼字串", "t": 1718499990000 },
-    ...
-  ]
-}
-```
-
-- 回應 **HTTP 200** 視為成功；非 200 會顯示「上傳失敗」。
-- ⚠️ **CORS**：若 App 網域與 API 網域不同（例如 App 在 GitHub Pages、API 在公司站），公司 API 必須回 `Access-Control-Allow-Origin`（允許該來源）與處理 `OPTIONS` 預檢，否則瀏覽器會擋。把 App 放在公司同網域即可免此問題。
-
-> 「上傳後在退貨系統按確認」那一步：手機瀏覽器無法自動去點別的網站按鈕，所以由你公司 API 收到清單後自行處理，或人工確認。
+## 與公司 ERP（USale）的銜接
+本 PWA 不直接連 ERP（跨網域＋登入限制）。流程是：手機掃描收集 → 「複製已完成／匯出」帶到電腦 → 電腦上用 **Tampermonkey 腳本**（`usale-return-helper.user.js`，放在上層 ClaudeCode\ 資料夾）填入 USale 搜尋框查詢，退貨人工確認。
