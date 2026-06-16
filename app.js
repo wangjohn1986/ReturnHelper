@@ -6,6 +6,9 @@
 const $ = (id) => document.getElementById(id);
 const RE_TW = /^TW[A-Za-z0-9]{13}$/;
 const LS_RELAY = 'sr_relay', LS_KEY = 'sr_key';
+// 內建預設（免每台手機手動設定；可在 ⚙ 覆寫）
+const DEFAULT_RELAY = 'https://script.google.com/macros/s/AKfycbx7iFTntfKD26-dLDndTPqZMPNsBY5QISXcopbLk2knpHLxOb2Jcr4IhQFr3in3pUKiUA/exec';
+const DEFAULT_KEY = '1234';
 
 let mode = 'A';
 let stream = null, scanning = false, lastHitAt = 0, bd = null;
@@ -40,7 +43,12 @@ async function addCode(raw, m) {
   try { await dbAdd({ code, mode: m, ts: nowStr() }); seen.add(code); return true; } catch (e) { return false; }
 }
 // 從 QR 內容取出 TW＋13 碼（QR 編號格式與文字掃碼相同）
-function extractOneTW(raw) { const m = (raw || '').toUpperCase().match(/TW[A-Z0-9]{13}/); return m ? m[0] : null; }
+function extractOneTW(raw) {
+  // 只接受獨立的 TW+13（前後不可黏其他英數，例如 SPXTW... 不算）
+  const tokens = (raw || '').toUpperCase().split(/[^A-Z0-9]+/);
+  for (const t of tokens) { if (RE_TW.test(t)) return t; }
+  return null;
+}
 // 模式 A 即時掃：單筆，含節流與音效
 async function addCodeLive(raw) {
   if (Date.now() - lastHitAt < 1200) return;
@@ -102,9 +110,8 @@ async function ensureOcr() {
 }
 function extractCodes(text) {
   const up = (text || '').toUpperCase(); const set = new Set();
-  up.split(/[^A-Z0-9]+/).forEach(t => { if (RE_TW.test(t)) set.add(t); });        // 逐 token
-  const concat = up.replace(/[^A-Z0-9]/g, ''); let m; const re = /TW[A-Z0-9]{13}/g;  // 補抓連在一起的
-  while ((m = re.exec(concat))) set.add(m[0]);
+  // 只接受「獨立的」TW+13 token；前後黏其他英數（如 SPXTW...）一律排除
+  up.split(/[^A-Z0-9]+/).forEach(t => { if (RE_TW.test(t)) set.add(t); });
   return [...set];
 }
 async function processPhoto(file) {
@@ -174,28 +181,23 @@ function composeReport(all) {
   t += `文字掃碼 (無包裝) 合計${b.length}筆\n` + (b.length ? b.join('\n') : '（無）');
   return t;
 }
-/* 上傳至 LINE：用系統分享(iOS)選 LINE，後備開 LINE 分享連結／複製 */
+/* 上傳至 LINE：一律透過中繼讓「機器人」推到群組（不會用個人帳號分享） */
 async function uploadToLine() {
   const all = (await dbAll()).sort((x, y) => (x.ts < y.ts ? -1 : 1));
   if (!all.length) { dialog('沒有資料可上傳。', [{ label: '知道了' }]); return; }
   const text = composeReport(all);
-  // 優先：透過中繼讓機器人自動推送
-  const relay = localStorage.getItem(LS_RELAY) || '';
-  if (relay) {
-    try {
-      await fetch(relay, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ key: localStorage.getItem(LS_KEY) || '', text }) });
-      toast('已送出 LINE 回報'); beep(true); return;
-    } catch (e) { dialog('送出中繼失敗：' + (e && e.message ? e.message : e) + '\n改用系統分享。', [{ label: '知道了' }]); }
-  }
-  // 後備：系統分享 / LINE 連結
-  if (navigator.share) {
-    try { await navigator.share({ text }); return; }
-    catch (e) { if (e && e.name === 'AbortError') return; }
-  }
-  try { window.location.href = 'https://line.me/R/msg/text/?' + encodeURIComponent(text); }
-  catch (e) {
-    try { await navigator.clipboard.writeText(text); dialog('已複製回報內容，請手動貼到 LINE。', [{ label: '知道了' }]); }
-    catch (e2) { dialog('無法開啟 LINE。', [{ label: '知道了' }]); }
+  const relay = (localStorage.getItem(LS_RELAY) || DEFAULT_RELAY).trim();
+  const key = localStorage.getItem(LS_KEY) || DEFAULT_KEY;
+  if (!relay) { dialog('尚未設定 LINE 中繼網址（右上 ⚙）。', [{ label: '知道了' }]); return; }
+  try {
+    const r = await fetch(relay, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ key, text }) });
+    const t = await r.text().catch(() => '');
+    if (/line 200/.test(t)) { toast('已送出 LINE 回報'); beep(true); return; }
+    if (/bad key/.test(t)) { dialog('通關碼不符，請到 ⚙ 確認。', [{ label: '知道了' }]); return; }
+    if (/line \d/.test(t)) { dialog('LINE 拒絕推送（' + t + '）。\n多半是 token 失效或群組設定問題。', [{ label: '知道了' }]); return; }
+    toast('已送出（請到群組確認是否收到）'); beep(true);
+  } catch (e) {
+    dialog('送出失敗：' + (e && e.message ? e.message : e) + '\n請確認網路，或到 ⚙ 檢查中繼網址。', [{ label: '知道了' }]);
   }
 }
 async function exportCSV() {
@@ -228,7 +230,7 @@ function beep(ok) {
   try { navigator.vibrate && navigator.vibrate(ok ? 60 : [40, 40, 40]); } catch (e) {}
 }
 function nowStr() { const d = new Date(), p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`; }
-function openSettings() { $('relay-url').value = localStorage.getItem(LS_RELAY) || ''; $('relay-key').value = localStorage.getItem(LS_KEY) || ''; $('settings').hidden = false; }
+function openSettings() { $('relay-url').value = localStorage.getItem(LS_RELAY) || DEFAULT_RELAY; $('relay-key').value = localStorage.getItem(LS_KEY) || DEFAULT_KEY; $('settings').hidden = false; }
 function closeSettings() { $('settings').hidden = true; }
 function saveSettings() { localStorage.setItem(LS_RELAY, $('relay-url').value.trim()); localStorage.setItem(LS_KEY, $('relay-key').value.trim()); closeSettings(); toast('設定已儲存'); }
 function dialog(text, buttons) {
