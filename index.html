@@ -14,9 +14,8 @@
 </head>
 <body>
   <header class="top">
-    <span class="top-title">↩ 未取貨助手</span>
-    <span class="hdr-prog" id="hdr-count">已掃 0</span>
-    <button id="settings-btn" class="gear" type="button" aria-label="設定">⚙</button>
+    <span class="top-title">未取貨助手</span>
+    <span class="hdr-prog" id="hdr-count">QR掃碼 0　文字掃碼 0　合計 0</span>
   </header>
 
   <!-- 鏡頭舞台 -->
@@ -64,28 +63,7 @@
     <p class="empty" id="empty">尚無資料，請開啟鏡頭開始掃描。</p>
   </main>
 
-  <!-- 音效設定 -->
-  <div class="modal" id="settings" hidden>
-    <div class="modal-box">
-      <div class="modal-head">音效設定 <button id="settings-close" class="x" type="button" aria-label="關閉">✕</button></div>
-      <label class="lab">提示音效</label>
-      <select id="snd-type" class="sel">
-        <option value="beep">經典嗶</option>
-        <option value="ding">清脆叮</option>
-        <option value="double">雙嗶</option>
-        <option value="low">低音嘟</option>
-        <option value="chime">上升鈴</option>
-      </select>
-      <label class="lab chk" style="margin-top:14px;"><input type="checkbox" id="snd-on"> 開啟掃描提示音</label>
-      <label class="lab" style="margin-top:14px;">音量：<b id="snd-vol-v">60</b></label>
-      <input type="range" id="snd-vol" min="0" max="100" step="5">
-      <div class="modal-foot">
-        <button id="snd-test" class="btn" style="background:#475569" type="button">試聽</button>
-        <button id="settings-cancel" class="btn cancel" type="button">取消</button>
-        <button id="settings-save" class="btn save" type="button">儲存</button>
-      </div>
-    </div>
-  </div>
+  <!-- 音效設定已移除：提示音固定「上升鈴」、音量請用手機音量鍵調整 -->
 
   <!-- A：框選欄位 -->
   <div class="modal" id="crop" hidden>

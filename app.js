@@ -10,8 +10,7 @@ const LS_RELAY = 'sr_relay', LS_KEY = 'sr_key';
 // 內建預設（免每台手機手動設定；可在 ⚙ 覆寫）
 const DEFAULT_RELAY = 'https://script.google.com/macros/s/AKfycbx7iFTntfKD26-dLDndTPqZMPNsBY5QISXcopbLk2knpHLxOb2Jcr4IhQFr3in3pUKiUA/exec';
 const DEFAULT_KEY = '1234';
-// 音效設定 localStorage 鍵
-const LS_SND_ON = 'sr_snd_on', LS_SND_VOL = 'sr_snd_vol', LS_SND_TYPE = 'sr_snd_type';
+// （音效設定已移除；提示音固定「上升鈴」、音量由手機調整）
 
 let mode = 'A';
 let stream = null, scanning = false, lastHitAt = 0, bd = null;
@@ -221,7 +220,8 @@ function hideBusy() { $('busy').hidden = true; }
 async function render() {
   const all = (await dbAll()).sort((a, b) => (a.ts < b.ts ? -1 : 1));
   $('cnt').textContent = all.length;
-  $('hdr-count').textContent = '已掃 ' + all.length;
+  const _qa = all.filter(r => r.mode === 'A').length, _qb = all.length - _qa;
+  $('hdr-count').textContent = `QR掃碼 ${_qa}　文字掃碼 ${_qb}　合計 ${all.length}`;
   $('counter').textContent = `已掃描 ${all.length} 筆`;
   $('empty').hidden = all.length > 0;
   const list = $('list'); list.innerHTML = '';
@@ -297,13 +297,6 @@ async function clearAll() {
 /* ---------- 小工具 ---------- */
 let toastT = null;
 function toast(msg, warn) { const t = $('toast'); t.textContent = msg; t.classList.toggle('warn', !!warn); t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 1600); }
-function sndCfg() {
-  return {
-    on: localStorage.getItem(LS_SND_ON) !== '0',                       // 預設開
-    vol: (parseInt(localStorage.getItem(LS_SND_VOL) || '60', 10)) / 100, // 預設 0.6
-    type: localStorage.getItem(LS_SND_TYPE) || 'beep'
-  };
-}
 function ensureActx() { try { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume(); } catch (e) {} }
 function tone(freq, dur, wave, vol, delay) {
   if (!actx) return;
@@ -315,51 +308,22 @@ function tone(freq, dur, wave, vol, delay) {
   g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
   o.start(t0); o.stop(t0 + dur + 0.03);
 }
-// 成功音（依選擇的種類）
-function playSuccess(type, v) {
+const SND_VOL = 0.95; // 固定音量（設大聲；實際大小請用手機音量鍵調）
+// 成功音：固定「上升鈴」（880→1320）
+function playSuccess() {
   ensureActx(); if (!actx) return;
-  switch (type) {
-    case 'ding': tone(1320, 0.3, 'sine', v, 0); break;
-    case 'double': tone(1000, 0.12, 'square', v, 0); tone(1000, 0.12, 'square', v, 0.16); break;
-    case 'low': tone(620, 0.22, 'square', v, 0); break;
-    case 'chime': tone(880, 0.14, 'triangle', v, 0); tone(1320, 0.22, 'triangle', v, 0.14); break;
-    default: tone(1000, 0.18, 'square', v, 0); // beep
-  }
+  tone(880, 0.16, 'triangle', SND_VOL, 0);
+  tone(1320, 0.26, 'triangle', SND_VOL, 0.15);
 }
 function beep(ok) {
-  const s = sndCfg();
-  if (s.on) {
-    ensureActx();
-    if (actx) {
-      if (ok) playSuccess(s.type, s.vol);
-      else { tone(320, 0.16, 'square', s.vol, 0); tone(250, 0.18, 'square', s.vol, 0.17); } // 錯誤：低音雙嗶
-    }
+  ensureActx();
+  if (actx) {
+    if (ok) playSuccess();
+    else { tone(320, 0.16, 'square', SND_VOL, 0); tone(250, 0.18, 'square', SND_VOL, 0.17); } // 錯誤：低音雙嗶
   }
   try { navigator.vibrate && navigator.vibrate(ok ? 60 : [40, 40, 40]); } catch (e) {}
 }
 function nowStr() { const d = new Date(), p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`; }
-
-/* 音效設定視窗 */
-function openSettings() {
-  const s = sndCfg();
-  $('snd-type').value = s.type;
-  $('snd-on').checked = s.on;
-  $('snd-vol').value = Math.round(s.vol * 100);
-  $('snd-vol-v').textContent = Math.round(s.vol * 100);
-  $('settings').hidden = false;
-}
-function closeSettings() { $('settings').hidden = true; }
-function saveSettings() {
-  localStorage.setItem(LS_SND_TYPE, $('snd-type').value);
-  localStorage.setItem(LS_SND_ON, $('snd-on').checked ? '1' : '0');
-  localStorage.setItem(LS_SND_VOL, String(parseInt($('snd-vol').value, 10)));
-  closeSettings(); toast('音效設定已儲存');
-}
-function testSound() {
-  if (!$('snd-on').checked) { toast('音效目前為關閉'); return; }
-  ensureActx();
-  playSuccess($('snd-type').value, parseInt($('snd-vol').value, 10) / 100);
-}
 function dialog(text, buttons) {
   const box = $('dialog'); $('dialog-text').textContent = text; const foot = $('dialog-foot'); foot.innerHTML = '';
   buttons.forEach(b => { const el = document.createElement('button'); el.className = 'btn ' + (b.danger ? 'up' : b.onClick ? 'save' : 'cancel'); if (b.danger) el.style.background = 'var(--red)'; el.textContent = b.label; el.onclick = () => { box.hidden = true; if (b.onClick) b.onClick(); }; foot.appendChild(el); });
@@ -385,12 +349,6 @@ async function init() {
   bindCrop();
   $('copy-list').onclick = uploadToLine;
   $('clear-all').onclick = clearAll;
-  $('settings-btn').onclick = openSettings;
-  $('settings-close').onclick = closeSettings;
-  $('settings-cancel').onclick = closeSettings;
-  $('settings-save').onclick = saveSettings;
-  $('snd-test').onclick = testSound;
-  $('snd-vol').oninput = function () { $('snd-vol-v').textContent = this.value; };
 
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 
