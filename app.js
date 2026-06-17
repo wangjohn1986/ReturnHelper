@@ -295,10 +295,7 @@ async function uploadToLine() {
   if (connState !== 'on') { dialog('上傳功能停用：尚未連線。\n請於電腦端用授權帳號開啟「未取貨助手」並停在訂單頁，待指示燈轉綠再同步。', [{ label: '知道了' }]); return; }
   const all = (await dbAll()).sort((x, y) => (x.ts < y.ts ? -1 : 1));
   if (!all.length) { dialog('沒有資料可上傳。', [{ label: '知道了' }]); return; }
-  dialog(`確定上傳 ${all.length} 筆給電腦「執行未取入庫」？`, [
-    { label: '上傳', onClick: () => sendToUsale(all) },
-    { label: '取消' }
-  ]);
+  sendToUsale(all); // 直接上傳（已移除「確定上傳？」前置確認），成功後跳合併的核對視窗
 }
 async function sendToUsale(all) {
   const numbers = all.map(r => r.code);
@@ -317,12 +314,12 @@ async function sendToUsale(all) {
 }
 function askClearAfterUpload(n) {
   dialog(
-    `系統已同步 ${n} 筆資料至 ERP。\n\n⚠️ 作業規範：請先至 ERP 核對接收數量是否為 ${n} 筆（核對為作業人員之責任）。確認無誤後再執行清空；若數量不符，請保留畫面並聯繫技術支援。`,
+    `請確認 ERP 接收數量是否正確。\n\n⚠️ 若數量不符，請點選「保留」並保留單據，回報主管。`,
     [
-      { label: '確認無誤，清空畫面', onClick: async () => { await dbClear(); seen.clear(); render(); } },
-      { label: '數量有誤，保留畫面' }
+      { label: '確認無誤，清空', onClick: async () => { await dbClear(); seen.clear(); render(); } },
+      { label: '數量有誤，保留' }
     ],
-    `請核對同步數量（共 ${n} 筆）`
+    `上傳數量（共 ${n} 筆）`
   );
 }
 async function clearAll() {
