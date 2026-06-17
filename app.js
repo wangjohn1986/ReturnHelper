@@ -246,12 +246,12 @@ async function render() {
   updateUploadBtn();
 }
 
-/* 同步按鈕狀態：未連線→禁用「請先啟動助手」；已連線/未知→「同步至系統」（有資料才可按） */
+/* 同步按鈕狀態：只有「已連線(綠)」才可按；黃/紅都禁用（掃碼不受影響，只擋上傳） */
 function updateUploadBtn() {
   const btn = $('copy-list'); if (!btn) return;
-  if (connState === 'off') { btn.disabled = true; btn.textContent = '請先啟動助手'; return; }
-  btn.disabled = listCount === 0;          // 'on' 或 'unknown'(fail-open，避免中繼未更新就卡死)
-  btn.textContent = '同步至系統';
+  if (connState === 'on') { btn.disabled = listCount === 0; btn.textContent = '同步至系統'; }
+  else if (connState === 'unknown') { btn.disabled = true; btn.textContent = '連線確認中…'; }
+  else { btn.disabled = true; btn.textContent = '請先啟動助手'; } // 'off'
 }
 
 /* 連線指示燈：依狀態更新圓點顏色與文字，並連動按鈕 */
@@ -259,9 +259,9 @@ function setConn(state) {
   connState = state;
   const dot = $('conn-dot'), label = $('conn-label');
   if (dot) dot.className = 'conn-dot ' + (state === 'on' ? 'on' : state === 'off' ? 'off' : 'unknown');
-  if (label) label.textContent = state === 'on' ? '蝦皮助手：已連線'
-    : state === 'off' ? '蝦皮助手：未連線（請先啟動）'
-    : '蝦皮助手：連線狀態未知';
+  if (label) label.textContent = state === 'on' ? '上傳功能已啟用：蝦皮助手已連線'
+    : state === 'off' ? '上傳功能停用（請於電腦端啟動「未取貨助手」）'
+    : '連線確認中…';
   updateUploadBtn();
 }
 
@@ -292,7 +292,7 @@ function composeReport(all) {
 }
 /* 執行未取入庫：先確認，再把整批號碼上傳到中繼站，電腦端擴充會自動帶出處理 */
 async function uploadToLine() {
-  if (connState === 'off') { dialog('「蝦皮助手」尚未連線。\n請先在電腦開啟未取貨助手並停在訂單頁，待指示燈轉綠再同步。', [{ label: '知道了' }]); return; }
+  if (connState !== 'on') { dialog('上傳功能停用：尚未連線。\n請於電腦端用授權帳號開啟「未取貨助手」並停在訂單頁，待指示燈轉綠再同步。', [{ label: '知道了' }]); return; }
   const all = (await dbAll()).sort((x, y) => (x.ts < y.ts ? -1 : 1));
   if (!all.length) { dialog('沒有資料可上傳。', [{ label: '知道了' }]); return; }
   dialog(`確定上傳 ${all.length} 筆給電腦「執行未取入庫」？`, [
@@ -309,6 +309,7 @@ async function sendToUsale(all) {
     const r = await fetch(relay, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ key, action: 'usale-upload', numbers }) });
     const t = await r.text().catch(() => '');
     if (/bad key/.test(t)) { dialog('通關碼不符，請到 ⚙ 確認。', [{ label: '知道了' }]); return; }
+    if (/no-online/.test(t)) { setConn('off'); dialog('上傳遭拒：電腦端未授權上線。\n請於電腦端用授權帳號開啟「未取貨助手」並停在訂單頁，待指示燈轉綠再同步。', [{ label: '知道了' }]); return; }
     toast('✅ 已上傳，電腦端會自動帶出'); beep(true); askClearAfterUpload(numbers.length);
   } catch (e) {
     dialog('送出失敗：' + (e && e.message ? e.message : e) + '\n請確認網路，或到 ⚙ 檢查中繼網址。', [{ label: '知道了' }]); return;

@@ -49,6 +49,9 @@ function doPost(e) {
     // (1.5) 手機「執行未取入庫」→ 把整批號碼存起來給擴充來拿（不推 LINE）
     if (body.action === 'usale-upload') {
       if (body.key !== KEY) return out('bad key');
+      // 上傳閘門：沒有授權端心跳（12秒內）就拒收 → 堵死手機綠燈延遲的時間差空窗
+      var __p0 = Number(PropertiesService.getScriptProperties().getProperty('USALE_PING') || 0);
+      if (Date.now() - __p0 > 12000) return out('no-online');
       var batch = { batchId: Date.now(), numbers: (body.numbers || []), uploadedAt: new Date().toISOString() };
       PropertiesService.getScriptProperties().setProperty('USALE_BATCH', JSON.stringify(batch));
       return out('usale-upload ok ' + batch.numbers.length);
@@ -111,7 +114,7 @@ function doGet(e) {
   if (e && e.parameter && e.parameter.action === 'usale-status') {
     if (e.parameter.key !== KEY) return outJson({ error: 'bad key' });
     var ping = Number(p.getProperty('USALE_PING') || 0);
-    return outJson({ online: ping > 0 && (Date.now() - ping) < 20000, ping: ping });
+    return outJson({ online: ping > 0 && (Date.now() - ping) < 12000, ping: ping });
   }
   // 後台/PWA 讀 LINE 範本（?action=getTemplate&key=KEY）
   if (e && e.parameter && e.parameter.action === 'getTemplate') {
