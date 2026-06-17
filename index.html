@@ -23,7 +23,6 @@
     <video id="video" playsinline muted autoplay></video>
     <canvas id="frame-canvas" hidden></canvas>
 
-    <div class="counter" id="counter">已掃描 0 筆</div>
 
     <!-- 黃框遮罩層 -->
     <div class="overlay" id="overlay">
@@ -35,15 +34,15 @@
     <button class="start-cam" id="start-cam" type="button">📷 點擊開啟鏡頭</button>
 
     <!-- 模式 B：拍照／選照片 批次辨識 -->
-    <button class="batch-btn" id="batch-btn" type="button" hidden>📷 拍照／選照片　批次辨識</button>
-    <input id="photo-input" type="file" accept="image/*" hidden>
+    <button class="batch-btn" id="batch-btn" type="button" hidden>📷 拍照辨識</button>
+    <input id="photo-input" type="file" accept="image/*" capture="environment" hidden>
 
     <!-- 辨識中遮罩 -->
     <div class="busy" id="busy" hidden><div class="busy-box"><div class="busy-spin"></div><div class="busy-sub" id="busy-sub">辨識中…</div></div></div>
 
     <button class="fab" id="fab" type="button" aria-label="切換掃描模式">
-      <span class="fab-mode" id="fab-mode">A</span>
-      <span class="fab-label" id="fab-label">條碼</span>
+      <span class="fab-mode" id="fab-mode">QR</span>
+      <span class="fab-label" id="fab-label">掃碼</span>
     </button>
 
     <div class="toast" id="toast"></div>

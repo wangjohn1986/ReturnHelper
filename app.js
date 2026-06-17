@@ -203,8 +203,8 @@ function closeSuspect() { $('suspect').hidden = true; }
 function setMode(m) {
   mode = m; const a = (m === 'A');
   $('fab').classList.toggle('mode-b', !a);
-  $('fab-mode').textContent = m;
-  $('fab-label').textContent = a ? '條碼' : '拍照';
+  $('fab-mode').textContent = a ? 'QR' : '文字';
+  $('fab-label').textContent = a ? '掃碼' : '掃描';
   $('guide').textContent = a ? '請掃描二維碼' : '拍整張清單 → 批次辨識';
   $('frame').style.display = a ? '' : 'none';
   $('frame').classList.toggle('mode-a', a);
@@ -222,7 +222,6 @@ async function render() {
   $('cnt').textContent = all.length;
   const _qa = all.filter(r => r.mode === 'A').length, _qb = all.length - _qa;
   $('hdr-count').textContent = `QR掃碼 ${_qa}　文字掃碼 ${_qb}　合計 ${all.length}`;
-  $('counter').textContent = `已掃描 ${all.length} 筆`;
   $('empty').hidden = all.length > 0;
   const list = $('list'); list.innerHTML = '';
   all.forEach((r, i) => {
