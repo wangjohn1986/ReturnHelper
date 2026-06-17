@@ -12,6 +12,9 @@ const DEFAULT_RELAY = 'https://script.google.com/macros/s/AKfycbx7iFTntfKD26-dLD
 const DEFAULT_KEY = '1234';
 // （音效設定已移除；提示音固定「上升鈴」、音量由手機調整）
 
+let listCount = 0;           // 目前清單筆數（給按鈕連動）
+let connState = 'unknown';   // 蝦皮助手連線狀態：'on' | 'off' | 'unknown'
+
 let mode = 'A';
 let stream = null, scanning = false, lastHitAt = 0, bd = null;
 let ocrWorker = null;
@@ -238,8 +241,40 @@ async function render() {
     ]);
   });
   list.scrollTop = list.scrollHeight;
-  $('copy-list').disabled = all.length === 0;
+  listCount = all.length;
   $('clear-all').disabled = all.length === 0;
+  updateUploadBtn();
+}
+
+/* 同步按鈕狀態：未連線→禁用「請先啟動助手」；已連線/未知→「同步至系統」（有資料才可按） */
+function updateUploadBtn() {
+  const btn = $('copy-list'); if (!btn) return;
+  if (connState === 'off') { btn.disabled = true; btn.textContent = '請先啟動助手'; return; }
+  btn.disabled = listCount === 0;          // 'on' 或 'unknown'(fail-open，避免中繼未更新就卡死)
+  btn.textContent = '同步至系統';
+}
+
+/* 連線指示燈：依狀態更新圓點顏色與文字，並連動按鈕 */
+function setConn(state) {
+  connState = state;
+  const dot = $('conn-dot'), label = $('conn-label');
+  if (dot) dot.className = 'conn-dot ' + (state === 'on' ? 'on' : state === 'off' ? 'off' : 'unknown');
+  if (label) label.textContent = state === 'on' ? '蝦皮助手：已連線'
+    : state === 'off' ? '蝦皮助手：未連線（請先啟動）'
+    : '蝦皮助手：連線狀態未知';
+  updateUploadBtn();
+}
+
+/* 每 5 秒向中繼查「蝦皮助手」是否在線（擴充每5秒輪詢會更新心跳） */
+async function pollConnStatus() {
+  const relay = (localStorage.getItem(LS_RELAY) || DEFAULT_RELAY).trim();
+  const key = localStorage.getItem(LS_KEY) || DEFAULT_KEY;
+  if (!relay) { setConn('off'); return; }
+  try {
+    const u = relay + (relay.includes('?') ? '&' : '?') + 'action=usale-status&key=' + encodeURIComponent(key);
+    const j = await (await fetch(u, { cache: 'no-store' })).json(); // 中繼舊版會回純文字 → 解析失敗 → unknown
+    setConn(j && j.online ? 'on' : 'off');
+  } catch (e) { setConn('unknown'); }
 }
 function timeShort(ts) { return (ts || '').split(' ')[1] || ts; }
 
@@ -257,6 +292,7 @@ function composeReport(all) {
 }
 /* 執行未取入庫：先確認，再把整批號碼上傳到中繼站，電腦端擴充會自動帶出處理 */
 async function uploadToLine() {
+  if (connState === 'off') { dialog('「蝦皮助手」尚未連線。\n請先在電腦開啟未取貨助手並停在訂單頁，待指示燈轉綠再同步。', [{ label: '知道了' }]); return; }
   const all = (await dbAll()).sort((x, y) => (x.ts < y.ts ? -1 : 1));
   if (!all.length) { dialog('沒有資料可上傳。', [{ label: '知道了' }]); return; }
   dialog(`確定上傳 ${all.length} 筆給電腦「執行未取入庫」？`, [
@@ -350,6 +386,10 @@ async function init() {
   bindCrop();
   $('copy-list').onclick = uploadToLine;
   $('clear-all').onclick = clearAll;
+
+  // 連線指示燈：開機先查一次，之後每 5 秒輪詢
+  pollConnStatus();
+  setInterval(pollConnStatus, 5000);
 
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 

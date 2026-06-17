@@ -103,8 +103,15 @@ function doGet(e) {
   // 擴充輪詢：拿最新的 USale 批次（?action=usale-latest&key=KEY）
   if (e && e.parameter && e.parameter.action === 'usale-latest') {
     if (e.parameter.key !== KEY) return outJson({ error: 'bad key' });
+    p.setProperty('USALE_PING', String(Date.now())); // 擴充每5秒會打這支 → 當作「蝦皮助手在線」心跳
     var b = p.getProperty('USALE_BATCH');
     return outJson(b ? JSON.parse(b) : { batchId: 0, numbers: [] });
+  }
+  // PWA 查連線狀態（?action=usale-status&key=KEY）：20秒內有心跳＝在線
+  if (e && e.parameter && e.parameter.action === 'usale-status') {
+    if (e.parameter.key !== KEY) return outJson({ error: 'bad key' });
+    var ping = Number(p.getProperty('USALE_PING') || 0);
+    return outJson({ online: ping > 0 && (Date.now() - ping) < 20000, ping: ping });
   }
   // 後台/PWA 讀 LINE 範本（?action=getTemplate&key=KEY）
   if (e && e.parameter && e.parameter.action === 'getTemplate') {

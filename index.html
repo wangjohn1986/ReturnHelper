@@ -14,7 +14,7 @@
 </head>
 <body>
   <header class="top">
-    <span class="top-title">未取貨助手</span>
+    <span class="top-title">📥 未取貨助手</span>
     <span class="hdr-prog" id="hdr-count">QR掃碼 0　文字掃描 0　合計 0</span>
   </header>
 
@@ -54,10 +54,15 @@
       <span>掃描清單</span>
       <span class="counts">共 <b id="cnt">0</b> 筆</span>
     </div>
+    <div class="conn-status" id="conn-status">
+      <span class="conn-dot" id="conn-dot"></span>
+      <span class="conn-label" id="conn-label">蝦皮助手：偵測中…</span>
+    </div>
     <div class="list-tools">
-      <button id="copy-list" class="tool-btn primary" type="button">執行未取入庫</button>
+      <button id="copy-list" class="tool-btn primary" type="button" disabled>等待連線…</button>
       <button id="clear-all" class="tool-btn danger" type="button">清除全部</button>
     </div>
+    <p class="conn-hint">執行前請確認「未取貨助手」插件已開啟並處於未取貨頁面。</p>
     <div class="list" id="list"></div>
     <p class="empty" id="empty">尚無資料，請開啟鏡頭開始掃描。</p>
   </main>
@@ -91,6 +96,7 @@
   <!-- 確認彈窗 -->
   <div class="modal" id="dialog" hidden>
     <div class="modal-box">
+      <div class="dialog-title" id="dialog-title" hidden></div>
       <div class="dialog-text" id="dialog-text"></div>
       <div class="modal-foot" id="dialog-foot"></div>
     </div>
