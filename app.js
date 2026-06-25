@@ -97,7 +97,7 @@ async function loop() {
 // 從已載入的 Image 取(子)區域，縮放到 maxDim 內，灰階(偏重藍通道→淡化藍筆圈註)。
 // mode='otsu' → Otsu 自動門檻二值化；mode='gray' → 只灰階(交給 Tesseract 自己二值化)。兩種變體做聯集提高命中率。
 function imgToCanvas(img, sx, sy, sw, sh, maxDim, mode) {
-  const scale = Math.min(1, maxDim / Math.max(sw, sh));
+  const scale = Math.min(1.6, maxDim / Math.max(sw, sh)); // 大區域縮到 maxDim；小/窄區域放大至多 1.6x，提高每列像素
   const cv = document.createElement('canvas'); cv.width = Math.round(sw * scale); cv.height = Math.round(sh * scale);
   const x = cv.getContext('2d'); x.drawImage(img, sx, sy, sw, sh, 0, 0, cv.width, cv.height);
   const im = x.getImageData(0, 0, cv.width, cv.height), d = im.data;
@@ -133,17 +133,17 @@ async function ensureOcr() {
     load_freq_dawg: '0'
   });
 }
-// 取出精確的 TW+13；另把「TW 開頭、字數接近但不對」列為疑似(多半少認/多認一碼)
-// 規則：TW 前面不能有任何文字/數字 → 逐行只看「該行第一個英數段」，排除 SPXTW、數字開頭等
+// 取出精確的 TW+13。切成連續英數 token 比對：
+//  - 剛好 TW+13 → 收。
+//  - SPXTW… 因為整段沒分隔是「一個 token、不以 TW 起頭」→ 自動排除（TW 前不能有文字/數字）。
+//  - 訂單編號/商品標籤/數字段 → 不以 TW 起頭 → 排除。框選稍微帶到別欄也不會誤抓。
+//  - TW 開頭但差一兩碼 → 疑似(可手動修)。
 function extractAll(text) {
+  const up = (text || '').toUpperCase();
   const exact = new Set(), sus = new Set();
-  (text || '').split(/\r?\n/).forEach((line) => {
-    const m = line.toUpperCase().match(/[A-Z0-9]+/); // 該行第一段連續英數
-    if (!m) return;
-    const t = m[0];
-    if (RE_TW.test(t)) exact.add(t);                    // 剛好 TW+13
-    else if (/^TW[A-Z0-9]{10,16}$/.test(t)) sus.add(t); // TW 開頭但字數略有出入 → 疑似(可手動修)
-    // 其餘(SPXTW…、數字/別的字母開頭) → 直接排除
+  up.split(/[^A-Z0-9]+/).forEach((t) => {
+    if (RE_TW.test(t)) exact.add(t);
+    else if (/^TW[A-Z0-9]{11,15}$/.test(t)) sus.add(t);
   });
   return { exact: [...exact], suspects: [...sus].filter((s) => !exact.has(s)) };
 }
