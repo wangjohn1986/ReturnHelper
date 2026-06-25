@@ -94,19 +94,35 @@ async function loop() {
 }
 
 /* ---------- 模式 B：拍照／選照片 批次 OCR ---------- */
-// 從已載入的 Image 取(子)區域，縮放到 maxDim 內，灰階(偏重藍通道→淡化藍筆圈註)＋二值化
-function imgToCanvas(img, sx, sy, sw, sh, maxDim) {
+// 從已載入的 Image 取(子)區域，縮放到 maxDim 內，灰階(偏重藍通道→淡化藍筆圈註)。
+// mode='otsu' → Otsu 自動門檻二值化；mode='gray' → 只灰階(交給 Tesseract 自己二值化)。兩種變體做聯集提高命中率。
+function imgToCanvas(img, sx, sy, sw, sh, maxDim, mode) {
   const scale = Math.min(1, maxDim / Math.max(sw, sh));
   const cv = document.createElement('canvas'); cv.width = Math.round(sw * scale); cv.height = Math.round(sh * scale);
   const x = cv.getContext('2d'); x.drawImage(img, sx, sy, sw, sh, 0, 0, cv.width, cv.height);
   const im = x.getImageData(0, 0, cv.width, cv.height), d = im.data;
-  for (let i = 0; i < d.length; i += 4) { const g = 0.10 * d[i] + 0.20 * d[i + 1] + 0.70 * d[i + 2]; const v = g > 140 ? 255 : (g < 110 ? 0 : g); d[i] = d[i + 1] = d[i + 2] = v; }
+  const n = d.length / 4, gray = new Uint8Array(n), hist = new Array(256).fill(0);
+  for (let i = 0, j = 0; i < d.length; i += 4, j++) { const g = Math.round(0.10 * d[i] + 0.20 * d[i + 1] + 0.70 * d[i + 2]); gray[j] = g; hist[g]++; }
+  if (mode === 'gray') {
+    for (let i = 0, j = 0; i < d.length; i += 4, j++) { d[i] = d[i + 1] = d[i + 2] = gray[j]; }
+  } else {
+    // Otsu 自動門檻
+    let sum = 0; for (let t = 0; t < 256; t++) sum += t * hist[t];
+    let sumB = 0, wB = 0, maxVar = -1, thr = 140;
+    for (let t = 0; t < 256; t++) { wB += hist[t]; if (!wB) continue; const wF = n - wB; if (!wF) break; sumB += t * hist[t]; const mB = sumB / wB, mF = (sum - sumB) / wF, v = wB * wF * (mB - mF) * (mB - mF); if (v > maxVar) { maxVar = v; thr = t; } }
+    for (let i = 0, j = 0; i < d.length; i += 4, j++) { const v = gray[j] > thr ? 255 : 0; d[i] = d[i + 1] = d[i + 2] = v; }
+  }
   x.putImageData(im, 0, 0); return cv;
 }
 async function ensureOcr() {
   if (ocrWorker || !window.Tesseract) return;
   ocrWorker = await Tesseract.createWorker('eng');
-  await ocrWorker.setParameters({ tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', preserve_interword_spaces: '1' });
+  await ocrWorker.setParameters({
+    tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+    preserve_interword_spaces: '1',
+    tessedit_pageseg_mode: '6', // 6=單一文字區塊：整列清單逐行讀，最不會漏行
+    user_defined_dpi: '300'     // 固定 DPI，避免 Tesseract 亂猜縮放
+  });
 }
 // 取出精確的 TW+13；另把「TW 開頭、字數接近但不對」列為疑似(多半少認/多認一碼)
 function extractAll(text) {
@@ -160,17 +176,27 @@ function cropConfirm(whole) {
     region = [sel.x / cropScale, sel.y / cropScale, sel.w / cropScale, sel.h / cropScale];
   }
   $('crop').hidden = true;
-  const cv = imgToCanvas(cropImg, region[0], region[1], region[2], region[3], 2600);
-  cropImg = null; runOcr(cv);
+  const img = cropImg; cropImg = null;
+  runOcr(img, region);
 }
 
-/* 執行 OCR（傳入已前處理的 canvas）→ 精確碼直接加入；疑似碼進手動修正清單 */
-async function runOcr(cv) {
-  showBusy('辨識中…（數十筆需數秒）');
+/* 執行 OCR（傳入原圖+區域）→ 兩種前處理變體聯集 → 精確碼加入；疑似碼進手動修正清單 */
+async function runOcr(img, region) {
+  showBusy('辨識中…（數十筆約 10-20 秒）');
   try {
     await ensureOcr();
-    const { data } = await ocrWorker.recognize(cv);
-    const { exact, suspects } = extractAll(data.text || '');
+    const MAXDIM = 3000;
+    const exactSet = new Set(), susSet = new Set();
+    // Otsu 二值化 + 純灰階各跑一次取聯集，補回單一門檻會漏掉的行
+    for (const mode of ['otsu', 'gray']) {
+      const cv = imgToCanvas(img, region[0], region[1], region[2], region[3], MAXDIM, mode);
+      const { data } = await ocrWorker.recognize(cv);
+      const r = extractAll(data.text || '');
+      r.exact.forEach((c) => exactSet.add(c));
+      r.suspects.forEach((s) => susSet.add(s));
+    }
+    const exact = [...exactSet];
+    const suspects = [...susSet].filter((s) => !exactSet.has(s));
     let added = 0, dup = 0;
     for (const code of exact) { if (await addCode(code, 'B')) added++; else dup++; }
     hideBusy(); render(); if (added) beep(true);
